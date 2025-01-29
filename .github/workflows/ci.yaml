@@ -1,5 +1,4 @@
-name: Godot Mesa/NIR static libs
-
+name: 🏁 Windows Builds
 on:
   push:
   pull_request:
@@ -7,92 +6,149 @@ on:
 
 jobs:
   build:
+    runs-on: "ubuntu-20.04"
     name: ${{ matrix.name }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-        # MinGW/LLVM libs using UCRT
-        - name: 🏁 Windows - MinGW/LLVM (UCRT) x86_64
-          platform: windows
-          os: windows-2019
-          artifact-name: godot-nir-static-x86_64-llvm-release
-          artifact-path: bin/libNIR.windows.x86_64.a
-          flags: use_mingw=yes arch=x86_64 use_llvm=yes mingw_prefix=$HOME/llvm-mingw
-          llvm: yes
 
-        - name: 🏁 Windows - MinGW/LLVM (UCRT) x86_32
-          platform: windows
-          os: windows-2019
-          artifact-name: godot-nir-static-x86_32-llvm-release
-          artifact-path: bin/libNIR.windows.x86_32.a
-          flags: use_mingw=yes arch=x86_32 use_llvm=yes mingw_prefix=$HOME/llvm-mingw
-          llvm: yes
+          - name: Windows (arch=x86_64)
+            os: ubuntu-22.04
+            artifact-name: godot-nir-static-x86_64-release
+            artifact-path: bin/libNIR.windows.x86_64.a
+            sconsflags: use_mingw=yes arch=x86_64 use_llvm=yes
 
-        - name: 🏁 Windows - MinGW/LLVM (UCRT) arm64
-          platform: windows
-          os: windows-2019
-          artifact-name: godot-nir-static-arm64-llvm-release
-          artifact-path: bin/libNIR.windows.arm64.a
-          flags: use_mingw=yes arch=arm64 use_llvm=yes mingw_prefix=$HOME/llvm-mingw
-          llvm: yes
+          - name: Windows (arch=x86_32)
+            os: ubuntu-22.04
+            artifact-name: godot-nir-static-x86_32-release
+            artifact-path: bin/libNIR.windows.x86_32.a
+            sconsflags: use_mingw=yes arch=x86_32 use_llvm=yes
 
-        # MSVC libs
-        - name: 🏁 Windows - MSVC x86_64
-          platform: windows
-          os: windows-2019
-          artifact-name: godot-nir-static-x86_64-msvc-release
-          artifact-path: bin/libNIR.windows.x86_64.lib
-          flags: use_mingw=no arch=x86_64
+          - name: Windows (arch=arm64)
+            os: ubuntu-22.04
+            artifact-name: godot-nir-static-arm64-release
+            artifact-path: bin/libNIR.windows.arm64.a
+            sconsflags: use_mingw=yes arch=arm64 use_llvm=yes
+            arm: true
 
-        - name: 🏁 Windows - MSVC x86_32
-          platform: windows
-          os: windows-2019
-          artifact-name: godot-nir-static-x86_32-msvc-release
-          artifact-path: bin/libNIR.windows.x86_32.lib
-          flags: use_mingw=no arch=x86_32
-
-        - name: 🏁 Windows - MSVC arm64
-          platform: windows
-          os: windows-2019
-          artifact-name: godot-nir-static-arm64-msvc-release
-          artifact-path: bin/libNIR.windows.arm64.lib
-          flags: use_mingw=no arch=arm64
-
-        # MinGW/GCC libs using MSVCRT
-        - name: 🏁 Windows - MinGW/GCC (MSVCRT) x86_64
-          platform: windows
-          os: windows-2019
-          artifact-name: godot-nir-static-x86_64-gcc-release
-          artifact-path: bin/libNIR.windows.x86_64.a
-          flags: use_mingw=yes arch=x86_64
-          mingw: yes
-          msys: mingw64
-          msysenv: x86_64
-
-        - name: 🏁 Windows - MinGW/GCC (MSVCRT) x86_32
-          platform: windows
-          os: windows-2019
-          artifact-name: godot-nir-static-x86_32-gcc-release
-          artifact-path: bin/libNIR.windows.x86_32.a
-          flags: use_mingw=yes arch=x86_32
-          mingw: yes
-          msys: mingw32
-          msysenv: i686
-
-    runs-on: ${{ matrix.os }}
+          # - name: Windows (arch=arm32)
+          #   os: ubuntu-22.04
+          #   artifact-name: godot-nir-static-arm32-release
+          #   artifact-path: bin/libNIR.windows.arm32.a
+          #   sconsflags: use_mingw=yes arch=arm32 use_llvm=yes
+          #   arm: true
 
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: 'true'
+          submodules: recursive
+
+      - name: Distro-specific Deps Install
+        run: |
+          # Remove all existing third-party repositories
+          sudo rm -f /etc/apt/sources.list.d/*
+
+          # Add architecture support for 32-bit
+          sudo dpkg --add-architecture i386
+
+          # Update sources list to include default Ubuntu repositories
+          sudo bash -c 'cat > /etc/apt/sources.list <<EOF
+          deb http://archive.ubuntu.com/ubuntu/ focal main restricted universe multiverse
+          deb http://archive.ubuntu.com/ubuntu/ focal-updates main restricted universe multiverse
+          deb http://archive.ubuntu.com/ubuntu/ focal-security main restricted universe multiverse
+          deb http://archive.ubuntu.com/ubuntu/ focal-backports main restricted universe multiverse
+          EOF'
+
+          # Update package lists
+          sudo apt-get update
+
+          sudo apt-get install -y --no-install-recommends \
+            bash bzip2 curl file gettext wget \
+            git make nano patch scons pkg-config unzip xz-utils cmake gdb
+
+          # Install required packages
+          sudo apt-get install -y \
+            build-essential \
+            gcc-multilib g++-multilib \
+            libc6-dev libc6-dev-i386 \
+            libx11-dev libx11-dev:i386 \
+            libxcursor-dev libxcursor-dev:i386 \
+            libxinerama-dev libxinerama-dev:i386 \
+            libxi-dev libxi-dev:i386 \
+            libxrandr-dev libxrandr-dev:i386 \
+            libgl1-mesa-dev libgl1-mesa-dev:i386 
+          sudo apt-get install -y \
+            libglu1-mesa-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libudev-dev \
+            libwayland-dev \
+            libstdc++6 \
+            libatomic1 \
+            libfreetype6-dev \
+            libssl-dev \
+            libc++-dev \
+            libc++abi-dev \
+            libgl-dev \
+            liblzma-dev \
+            liblzma5 \
+            libglu-dev \
+            libdbus-1-dev \
+            libwayland-bin
+          sudo apt-get install -y \
+            yasm \
+            xvfb \
+            llvm \
+            gcc \
+            g++ \
+            libspeechd-dev \
+            speech-dispatcher \
+            fontconfig \
+            libfontconfig-dev \
+            directx-headers-dev
+          # mingw-w64* \
+          # sudo update-alternatives --config x86_64-w64-mingw32-g++
+          # sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+          # sudo update-alternatives --config x86_64-w64-mingw32-gcc
+          # sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          # sudo update-alternatives --config i686-w64-mingw32-g++
+          # sudo update-alternatives --set i686-w64-mingw32-g++ /usr/bin/i686-w64-mingw32-g++-posix
+          # sudo update-alternatives --config i686-w64-mingw32-gcc
+          # sudo update-alternatives --set i686-w64-mingw32-gcc /usr/bin/i686-w64-mingw32-gcc-posix
+          sudo rm -rf /var/lib/apt/lists/*
+          sudo apt-get purge -y --auto-remove
+          sudo apt-get autoremove
+          sudo apt-get clean
+
+      # - name: Install llvm-mingw
+      #   run: |
+      #     curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20240619/llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz && \
+      #     tar xf llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz && \
+      #     rm -f llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz
+      #     cd llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64
+      #     echo "MINGW_PREFIX=$(pwd)" >> $GITHUB_ENV
+      #     echo "$(pwd)/bin" >> $GITHUB_PATH
+
+      - name: Download and extract llvm-mingw SDK
+        env:
+          CURRENT_DIR: ${{ github.workspace }}
+        run: |
+          mkdir -p "$CURRENT_DIR/sdks"
+          cd "$CURRENT_DIR/sdks"
+          curl -LO https://github.com/mstorsjo/llvm-mingw/releases/download/20241015/llvm-mingw-20241015-msvcrt-ubuntu-20.04-x86_64.tar.xz
+          xz -dc llvm-mingw-20241015-msvcrt-ubuntu-20.04-x86_64.tar.xz | tar -xvf -
+          rm -f llvm-mingw-20241015-msvcrt-ubuntu-20.04-x86_64.tar.xz
+          cd llvm-mingw-20241015-msvcrt-ubuntu-20.04-x86_64
+          echo "MINGW_PREFIX=$(pwd)" >> $GITHUB_ENV
+          echo "$(pwd)/bin" >> $GITHUB_PATH
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Install SCons (Native env)
-        if: ${{ matrix.mingw != 'yes' }}
+      - name: Install SCons
         run: |
           python -m pip install scons==4.0.0
 
@@ -100,38 +156,14 @@ jobs:
         run: |
           python -m pip install mako
 
-      - name: Setup MinGW/LLVM
-        if: ${{ matrix.platform == 'windows' && matrix.llvm == 'yes' }}
-        run: |
-          curl -L -O https://github.com/mstorsjo/llvm-mingw/releases/download/20240619/llvm-mingw-20240619-ucrt-x86_64.zip
-          unzip -q llvm-mingw-*.zip
-          rm llvm-mingw-*.zip
-          mv llvm-mingw-* "$HOME/llvm-mingw"
-          echo "$HOME/llvm-mingw/bin" >> $GITHUB_PATH
-
-      - name: Setup MinGW/MSYS2
-        if: ${{ matrix.mingw == 'yes' }}
-        uses: msys2/setup-msys2@v2
-        with:
-          update: true
-          msystem: ${{matrix.msys}}
-          install: mingw-w64-${{matrix.msysenv}}-gcc mingw-w64-${{matrix.msysenv}}-scons
-
       - name: Prepare Mesa source
         shell: bash
         run: |
           ./update_mesa.sh
 
-      - name: Build Mesa (Native env)
-        if: ${{ matrix.mingw != 'yes' }}
+      - name: Compilation
         run: |
-          scons platform=${{ matrix.platform }} ${{ matrix.flags }} optimize=speed
-
-      - name: Build Mesa (MSYS2 env)
-        if: ${{ matrix.mingw == 'yes' }}
-        shell: msys2 {0}
-        run: |
-          scons platform=${{ matrix.platform }} ${{ matrix.flags }} optimize=speed
+          scons platform=windows ${{ matrix.sconsflags }} optimize=speed mingw_prefix=$MINGW_PREFIX
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
